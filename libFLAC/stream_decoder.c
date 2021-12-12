@@ -1,3 +1,8 @@
+/*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
 /* libFLAC - Free Lossless Audio Codec library
  * Copyright (C) 2000-2009  Josh Coalson
  * Copyright (C) 2011-2014  Xiph.Org Foundation
@@ -29,6 +34,24 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+#ifdef MTK_AOSP_ENHANCEMENT
+//YC_TEST
+#define LOG_NDEBUG 0
+#undef LOG_TAG
+#define LOG_TAG "FLACDecoder"
+
+#ifdef DEBUG
+// from JB, LOGD -> ALOGD
+#include <cutils/log.h>
+#define ALOG(priority, tag, ...) \
+    LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__)
+#define ALOGD(...) ((void)ALOG(LOG_DEBUG, LOG_TAG, __VA_ARGS__))
+//#define ALOGD LOGD
+#else
+#define ALOGD
+#endif
+#endif
 
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
@@ -3405,3 +3428,89 @@ FLAC__bool file_eof_callback_(const FLAC__StreamDecoder *decoder, void *client_d
 
 	return feof(decoder->private_->file)? true : false;
 }
+
+#ifdef MTK_AOSP_ENHANCEMENT
+//===YC_ADD ==== 2011.12.02 add this API for substream_info setting
+
+FLAC_API FLAC__bool FLAC__stream_decoder_set_metadata_substream_info(FLAC__StreamDecoder *decoder,FLAC__StreamMetadata_StreamInfo substream_info, OMX_FLAC_Parameters omxflacPara)
+{
+      FLAC__int8 i ;
+	  ALOGD("===== Substream info =========");
+	FLAC__ASSERT(0 != substream_info);
+	ALOGD("===== Substream info 1=========");
+	if(decoder->protected_->state != FLAC__STREAM_DECODER_UNINITIALIZED)
+		return false;
+	decoder->private_->stream_info.data.stream_info.min_blocksize = substream_info.min_blocksize;
+       decoder->private_->stream_info.data.stream_info.max_blocksize = substream_info.max_blocksize;
+	decoder->private_->stream_info.data.stream_info.min_framesize = substream_info.min_framesize;
+       decoder->private_->stream_info.data.stream_info.max_framesize = substream_info.max_framesize;
+	decoder->private_->stream_info.data.stream_info.sample_rate = substream_info.sample_rate;
+       decoder->private_->stream_info.data.stream_info.channels = substream_info.channels;
+	decoder->private_->stream_info.data.stream_info.bits_per_sample = substream_info.bits_per_sample;
+       decoder->private_->stream_info.data.stream_info.total_samples = substream_info.total_samples;
+       memcpy(decoder->private_->stream_info.data.stream_info.md5sum, substream_info.md5sum, 16);
+
+	ALOGD("===== Substream info =========");
+      ALOGD("FLACDecoder : min_blocksize : %d.\n",decoder->private_->stream_info.data.stream_info.min_blocksize)  ;
+      ALOGD("FLACDecoder : max_blocksize : %d.\n",decoder->private_->stream_info.data.stream_info.max_blocksize)  ;
+     ALOGD("FLACDecoder : min_framesize : %d.\n",decoder->private_->stream_info.data.stream_info.min_framesize)  ;
+      ALOGD("FLACDecoder : max_framesize : %d.\n",decoder->private_->stream_info.data.stream_info.max_framesize)  ;
+     ALOGD("FLACDecoder : sample_rate : %d.\n",decoder->private_->stream_info.data.stream_info.sample_rate)  ;
+      ALOGD("FLACDecoder : channels : %d.\n",decoder->private_->stream_info.data.stream_info.channels)  ;
+     ALOGD("FLACDecoder : bits_per_sample : %d.\n",decoder->private_->stream_info.data.stream_info.bits_per_sample)  ;
+      ALOGD("FLACDecoder : total_samples : %d.\n",decoder->private_->stream_info.data.stream_info.total_samples)  ;
+	/*for(i=0;i<16;i++)
+	{
+      ALOGD("FLACDecoder : md5sum[%d] : %d.\n",i,decoder->private_->stream_info.data.stream_info.md5sum[i])  ;
+ 	}*/
+	decoder->private_->has_stream_info = omxflacPara.has_stream_info;
+       decoder->private_->has_seek_table =omxflacPara.has_seek_table;
+       decoder->private_->stream_info.data.stream_info.total_samples =substream_info.total_samples;
+
+	return true;
+}
+
+FLAC_API FLAC__bool FLAC__stream_decoder_bitreader_clear(FLAC__StreamDecoder *decoder)
+{
+    ALOGD("FLAC__stream_decoder_bitreader_clear.\n");
+    if(!FLAC__bitreader_clear(decoder->private_->input))
+    	return false;
+    return true;
+}
+
+FLAC_API FLAC__bool FLAC__stream_decoder_getseektable(FLAC__StreamDecoder *decoder, FLAC__uint64 *sample_number,
+                                                            FLAC__uint64 *offset, unsigned *frame_samples )
+{
+    int i=0;
+	//ALOGD("metadata seektable %d, %d", decoder->private_->has_seek_table, decoder->private_->seek_table.data.seek_table.num_points);
+    if(decoder->private_->has_seek_table && (decoder->private_->seek_table.data.seek_table.num_points >1))
+    {
+        if((sample_number==NULL)||(offset==NULL))
+            return true;
+        for(i=0; i<decoder->private_->seek_table.data.seek_table.num_points;i++)
+        {
+            if((decoder->private_->seek_table.data.seek_table.points[i].sample_number > *sample_number)
+                ||(i== (decoder->private_->seek_table.data.seek_table.num_points-1)))
+            {
+                i--;
+                if(i < 0)
+                    return false;
+
+                *sample_number = decoder->private_->seek_table.data.seek_table.points[i].sample_number;
+                *offset = decoder->private_->seek_table.data.seek_table.points[i].stream_offset;
+                if(frame_samples)
+                    *frame_samples = decoder->private_->seek_table.data.seek_table.points[i].frame_samples;
+                /*ALOGD("seektable point %d, %lld, %llx, %x, %lld", i ,
+                    decoder->private_->seek_table.data.seek_table.points[i].sample_number,
+                    decoder->private_->seek_table.data.seek_table.points[i].stream_offset,
+                    decoder->private_->seek_table.data.seek_table.points[i].frame_samples, *sample_number);*/
+                return true;
+            }
+
+        }
+
+    }
+
+    return false;
+}
+#endif
