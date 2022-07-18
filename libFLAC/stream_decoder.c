@@ -29,6 +29,24 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef ANDROID_DEFAULT_CODE
+//YC_TEST
+#define LOG_NDEBUG 0
+#undef LOG_TAG
+#define LOG_TAG "FLACDecoder"
+
+#ifdef DEBUG
+// from JB, LOGD -> ALOGD
+#include <cutils/log.h>
+#define ALOG(priority, tag, ...) \
+    LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__)
+#define ALOGD(...) ((void)ALOG(LOG_DEBUG, LOG_TAG, __VA_ARGS__))
+//#define ALOGD LOGD
+#else
+#define ALOGD
+#endif
+#endif
+
 #if HAVE_CONFIG_H
 #  include <config.h>
 #endif
@@ -757,6 +775,56 @@ FLAC_API FLAC__bool FLAC__stream_decoder_set_md5_checking(FLAC__StreamDecoder *d
 	return true;
 }
 
+#ifndef ANDROID_DEFAULT_CODE
+//===YC_ADD ==== 2011.12.02 add this API for substream_info setting
+
+FLAC_API FLAC__bool FLAC__stream_decoder_set_metadata_substream_info(FLAC__StreamDecoder *decoder,FLAC__StreamMetadata_StreamInfo substream_info, OMX_FLAC_Parameters omxflacPara)
+{
+      FLAC__int8 i ;
+	  ALOGD("===== Substream info =========");
+	FLAC__ASSERT(0 != substream_info);
+	ALOGD("===== Substream info 1=========");
+	if(decoder->protected_->state != FLAC__STREAM_DECODER_UNINITIALIZED)
+		return false;
+	decoder->private_->stream_info.data.stream_info.min_blocksize = substream_info.min_blocksize;
+       decoder->private_->stream_info.data.stream_info.max_blocksize = substream_info.max_blocksize;
+	decoder->private_->stream_info.data.stream_info.min_framesize = substream_info.min_framesize;
+       decoder->private_->stream_info.data.stream_info.max_framesize = substream_info.max_framesize;
+	decoder->private_->stream_info.data.stream_info.sample_rate = substream_info.sample_rate;
+       decoder->private_->stream_info.data.stream_info.channels = substream_info.channels;
+	decoder->private_->stream_info.data.stream_info.bits_per_sample = substream_info.bits_per_sample;
+       decoder->private_->stream_info.data.stream_info.total_samples = substream_info.total_samples;
+       memcpy(decoder->private_->stream_info.data.stream_info.md5sum, substream_info.md5sum, 16);
+
+	ALOGD("===== Substream info =========");
+      ALOGD("FLACDecoder : min_blocksize : %d.\n",decoder->private_->stream_info.data.stream_info.min_blocksize)  ;
+      ALOGD("FLACDecoder : max_blocksize : %d.\n",decoder->private_->stream_info.data.stream_info.max_blocksize)  ;
+     ALOGD("FLACDecoder : min_framesize : %d.\n",decoder->private_->stream_info.data.stream_info.min_framesize)  ;
+      ALOGD("FLACDecoder : max_framesize : %d.\n",decoder->private_->stream_info.data.stream_info.max_framesize)  ;
+     ALOGD("FLACDecoder : sample_rate : %d.\n",decoder->private_->stream_info.data.stream_info.sample_rate)  ;
+      ALOGD("FLACDecoder : channels : %d.\n",decoder->private_->stream_info.data.stream_info.channels)  ;
+     ALOGD("FLACDecoder : bits_per_sample : %d.\n",decoder->private_->stream_info.data.stream_info.bits_per_sample)  ;
+      ALOGD("FLACDecoder : total_samples : %d.\n",decoder->private_->stream_info.data.stream_info.total_samples)  ;
+	for(i=0;i<16;i++)
+	{
+      ALOGD("FLACDecoder : md5sum[%d] : %d.\n",i,decoder->private_->stream_info.data.stream_info.md5sum[i])  ;
+ 	}
+	decoder->private_->has_stream_info = omxflacPara.has_stream_info;
+       decoder->private_->has_seek_table =omxflacPara.has_seek_table;
+       decoder->private_->stream_info.data.stream_info.total_samples =substream_info.total_samples;
+
+	return true;
+}
+
+FLAC_API FLAC__bool FLAC__stream_decoder_bitreader_clear(FLAC__StreamDecoder *decoder)
+{
+    ALOGD("FLAC__stream_decoder_bitreader_clear.\n");
+    if(!FLAC__bitreader_clear(decoder->private_->input))
+    	return false;
+    return true;
+}
+#endif
+
 FLAC_API FLAC__bool FLAC__stream_decoder_set_metadata_respond(FLAC__StreamDecoder *decoder, FLAC__MetadataType type)
 {
 	FLAC__ASSERT(0 != decoder);
@@ -1105,6 +1173,44 @@ FLAC_API FLAC__bool FLAC__stream_decoder_process_until_end_of_metadata(FLAC__Str
 	}
 }
 
+#ifndef ANDROID_DEFAULT_CODE
+FLAC_API FLAC__bool FLAC__stream_decoder_getseektable(FLAC__StreamDecoder *decoder, FLAC__uint64 *sample_number,
+                                                            FLAC__uint64 *offset, unsigned *frame_samples )
+{
+    int i=0;
+	ALOGD("metadata seektable %d, %d", decoder->private_->has_seek_table, decoder->private_->seek_table.data.seek_table.num_points);
+    if(decoder->private_->has_seek_table && (decoder->private_->seek_table.data.seek_table.num_points >1))
+    {
+        if((sample_number==NULL)&& (offset==NULL))
+            return true;
+        for(i=0; i<decoder->private_->seek_table.data.seek_table.num_points;i++)
+        {
+            if((decoder->private_->seek_table.data.seek_table.points[i].sample_number > *sample_number)
+                ||(i== (decoder->private_->has_seek_table, decoder->private_->seek_table.data.seek_table.num_points-1)))
+            {
+                i--;
+                if(i < 0)
+                    return false;
+
+                *sample_number = decoder->private_->seek_table.data.seek_table.points[i].sample_number;
+                *offset = decoder->private_->seek_table.data.seek_table.points[i].stream_offset;
+                if(frame_samples)
+                    *frame_samples = decoder->private_->seek_table.data.seek_table.points[i].frame_samples;
+                ALOGD("seektable point %d, %lld, %llx, %x, %lld", i ,
+                    decoder->private_->seek_table.data.seek_table.points[i].sample_number,
+                    decoder->private_->seek_table.data.seek_table.points[i].stream_offset,
+                    decoder->private_->seek_table.data.seek_table.points[i].frame_samples, *sample_number);
+                return true;
+            }
+
+        }
+
+    }
+
+    return false;
+}
+#endif
+
 FLAC_API FLAC__bool FLAC__stream_decoder_process_until_end_of_stream(FLAC__StreamDecoder *decoder)
 {
 	FLAC__bool dummy;
@@ -1294,7 +1400,7 @@ FILE *get_binary_stdin_(void)
 	 */
 #if defined _MSC_VER || defined __MINGW32__
 	_setmode(_fileno(stdin), _O_BINARY);
-#elif defined __CYGWIN__ 
+#elif defined __CYGWIN__
 	/* almost certainly not needed for any modern Cygwin, but let's be safe... */
 	setmode(_fileno(stdin), _O_BINARY);
 #elif defined __EMX__
@@ -3157,11 +3263,11 @@ FLAC__bool seek_to_absolute_sample_(FLAC__StreamDecoder *decoder, FLAC__uint64 s
 			}
 			/* our last move backwards wasn't big enough, try again */
 			approx_bytes_per_frame = approx_bytes_per_frame? approx_bytes_per_frame * 2 : 16;
-			continue;	
+			continue;
 		}
 		/* allow one seek over upper bound, so we can get a correct upper_bound_sample for streams with unknown total_samples */
 		first_seek = false;
-		
+
 		/* make sure we are not seeking in corrupted stream */
 		if (this_frame_sample < lower_bound_sample) {
 			decoder->protected_->state = FLAC__STREAM_DECODER_SEEK_ERROR;
@@ -3201,7 +3307,7 @@ FLAC__bool seek_to_absolute_sample_ogg_(FLAC__StreamDecoder *decoder, FLAC__uint
 	FLAC__bool did_a_seek;
 	unsigned iteration = 0;
 
-	/* In the first iterations, we will calculate the target byte position 
+	/* In the first iterations, we will calculate the target byte position
 	 * by the distance from the target sample to left_sample and
 	 * right_sample (let's call it "proportional search").  After that, we
 	 * will switch to binary search.

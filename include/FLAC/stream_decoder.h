@@ -464,6 +464,13 @@ typedef struct {
 	struct FLAC__StreamDecoderPrivate *private_; /* avoid the C++ keyword 'private' */
 } FLAC__StreamDecoder;
 
+#ifndef ANDROID_DEFAULT_CODE
+typedef struct{
+	FLAC__bool has_stream_info ;
+	FLAC__bool has_seek_table ;
+}OMX_FLAC_Parameters;
+#endif
+
 /** Signature for the read callback.
  *
  *  A function pointer matching this signature must be passed to
@@ -795,6 +802,14 @@ FLAC_API FLAC__bool FLAC__stream_decoder_set_ogg_serial_number(FLAC__StreamDecod
  *    \c false if the decoder is already initialized, else \c true.
  */
 FLAC_API FLAC__bool FLAC__stream_decoder_set_md5_checking(FLAC__StreamDecoder *decoder, FLAC__bool value);
+
+#ifndef ANDROID_DEFAULT_CODE
+/**Set Substream_info from omxcomponent
+**/
+FLAC_API FLAC__bool FLAC__stream_decoder_set_metadata_substream_info(FLAC__StreamDecoder *decoder,FLAC__StreamMetadata_StreamInfo substream_info, OMX_FLAC_Parameters omxflacPara);
+
+FLAC_API FLAC__bool FLAC__stream_decoder_bitreader_clear(FLAC__StreamDecoder *decoder);
+#endif
 
 /** Direct the decoder to pass on all metadata blocks of type \a type.
  *
@@ -1469,6 +1484,11 @@ FLAC_API FLAC__bool FLAC__stream_decoder_process_single(FLAC__StreamDecoder *dec
  *    FLAC__stream_decoder_get_state().
  */
 FLAC_API FLAC__bool FLAC__stream_decoder_process_until_end_of_metadata(FLAC__StreamDecoder *decoder);
+
+#ifndef ANDROID_DEFAULT_CODE
+FLAC_API FLAC__bool FLAC__stream_decoder_getseektable(FLAC__StreamDecoder *decoder, FLAC__uint64 *sample_number,
+                                                            FLAC__uint64 *offset, unsigned *frame_samples );
+#endif
 
 /** Decode until the end of the stream.
  *  This version instructs the decoder to decode from the current position
